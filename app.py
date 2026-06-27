@@ -20,7 +20,6 @@ download_progress = {'percent': 0, 'status': 'idle', 'speed': 'N/A', 'eta': 'N/A
 
 def get_video_info(url):
     """Fetch video metadata without downloading"""
-    # Common headers to mimic a real browser
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -37,13 +36,11 @@ def get_video_info(url):
         'ignoreerrors': True,
         'extract_flat': False,
         'headers': headers,
-        'cookiefile': None,  # Could add cookie support if needed
+        'cookiefile': None,
     }
     
-    # Instagram specific options
     if 'instagram.com' in url:
         ydl_opts['format'] = 'bestvideo+bestaudio/best'
-        # Instagram might need additional headers
         ydl_opts['headers']['Referer'] = 'https://www.instagram.com/'
     
     try:
@@ -55,14 +52,10 @@ def get_video_info(url):
             formats = []
             seen = set()
             
-            # For Instagram, sometimes the formats are in a different structure
-            # yt-dlp usually puts them in 'formats' key
             for f in info.get('formats', []):
-                # Skip audio-only formats for video list
                 if f.get('vcodec') == 'none':
                     continue
                 
-                # Create quality label
                 height = f.get('height')
                 if height:
                     label = f'{height}p'
@@ -73,12 +66,10 @@ def get_video_info(url):
                     if not label:
                         label = f'ID {f["format_id"]}'
                 
-                # Add filesize if available
                 filesize = f.get('filesize')
                 if not filesize:
                     filesize = f.get('filesize_approx', 0)
                 
-                # Only add unique labels
                 if label not in seen:
                     seen.add(label)
                     formats.append({
@@ -88,9 +79,7 @@ def get_video_info(url):
                         'filesize': filesize or 0
                     })
             
-            # If no formats found (especially for Instagram), try to extract from 'requested_formats' or 'url'
             if not formats and info.get('url'):
-                # Direct video URL fallback
                 formats.append({
                     'quality': 'Direct',
                     'format_id': 'direct',
@@ -98,10 +87,8 @@ def get_video_info(url):
                     'filesize': 0
                 })
             
-            # Sort by quality (highest first)
             def sort_key(x):
                 try:
-                    # Extract numeric part from quality string (e.g., "1080p" -> 1080)
                     num = ''.join(filter(str.isdigit, x['quality']))
                     return int(num) if num else 0
                 except:
@@ -109,7 +96,6 @@ def get_video_info(url):
             
             formats.sort(key=sort_key, reverse=True)
             
-            # Audio-only formats
             audio_formats = []
             for f in info.get('formats', []):
                 if f.get('acodec') != 'none' and f.get('vcodec') == 'none':
@@ -128,9 +114,7 @@ def get_video_info(url):
                         'filesize': filesize
                     })
             
-            # If still no formats (e.g., Instagram embedded), add fallback
             if not formats:
-                # For Instagram, we can use the direct video URL if available
                 if info.get('url'):
                     formats.append({
                         'quality': 'Source',
@@ -139,7 +123,6 @@ def get_video_info(url):
                         'filesize': 0
                     })
                 else:
-                    # Add standard YouTube-like fallback (won't work for Instagram but keeps UI)
                     fallback_formats = [
                         {'quality': '1080p', 'format_id': 'bestvideo[height<=1080]+bestaudio/best', 'ext': 'mp4', 'filesize': 0},
                         {'quality': '720p', 'format_id': 'bestvideo[height<=720]+bestaudio/best', 'ext': 'mp4', 'filesize': 0},
@@ -167,7 +150,6 @@ def get_video_info(url):
             }
     except Exception as e:
         print(f"Error fetching info: {e}")
-        # Return a basic structure with fallback formats for Instagram
         if 'instagram.com' in url:
             return {
                 'title': 'Instagram Video',
@@ -186,7 +168,6 @@ def get_video_info(url):
         return None
 
 def progress_hook(d):
-    """Progress hook for yt-dlp"""
     if d['status'] == 'downloading':
         download_progress['percent'] = d.get('_percent_str', '0%').replace('%', '').strip()
         download_progress['speed'] = d.get('_speed_str', 'N/A')
@@ -197,8 +178,6 @@ def progress_hook(d):
         download_progress['percent'] = '100'
 
 def download_video(url, format_id, quality_type='video'):
-    """Download video/audio with given format"""
-    # Headers for download
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -215,7 +194,6 @@ def download_video(url, format_id, quality_type='video'):
         'headers': headers,
     }
     
-    # Instagram specific
     if 'instagram.com' in url:
         ydl_opts['format'] = format_id if format_id != 'direct' else 'bestvideo+bestaudio/best'
         ydl_opts['headers']['Referer'] = 'https://www.instagram.com/'
@@ -241,9 +219,7 @@ def download_video(url, format_id, quality_type='video'):
     except Exception as e:
         download_progress['status'] = 'error'
         download_progress['error'] = str(e)
-        # If direct format failed, try fallback
         if 'instagram.com' in url and format_id == 'direct':
-            # Try downloading with best format
             return download_video(url, 'bestvideo+bestaudio/best', quality_type)
         return None
 
@@ -291,7 +267,8 @@ def download_file(filename):
 def progress():
     return jsonify(download_progress)
 
-# ----- Run -----
+# ----- Run (Production Ready) -----
 if __name__ == '__main__':
+    # Render will provide PORT environment variable
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)

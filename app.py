@@ -20,12 +20,32 @@ download_progress = {'percent': 0, 'status': 'idle', 'speed': 'N/A', 'eta': 'N/A
 
 def get_video_info(url):
     """Fetch video metadata without downloading"""
+    # Common headers to mimic a real browser
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+    }
+    
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
         'ignoreerrors': True,
         'extract_flat': False,
+        'headers': headers,
+        'cookiefile': None,  # Could add cookie support if needed
     }
+    
+    # Instagram specific options
+    if 'instagram.com' in url:
+        ydl_opts['format'] = 'bestvideo+bestaudio/best'
+        # Instagram might need additional headers
+        ydl_opts['headers']['Referer'] = 'https://www.instagram.com/'
+    
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -33,44 +53,136 @@ def get_video_info(url):
                 return None
 
             formats = []
-            seen_resolutions = set()
-            # Get video+audio formats
+            seen = set()
+            
+            # For Instagram, sometimes the formats are in a different structure
+            # yt-dlp usually puts them in 'formats' key
             for f in info.get('formats', []):
-                if f.get('vcodec') != 'none' and f.get('acodec') != 'none':
-                    height = f.get('height', 0)
-                    if height and height not in seen_resolutions:
-                        seen_resolutions.add(height)
-                        formats.append({
-                            'quality': f'{height}p',
-                            'format_id': f['format_id'],
-                            'ext': f['ext'],
-                            'filesize': f.get('filesize', 0)
-                        })
+                # Skip audio-only formats for video list
+                if f.get('vcodec') == 'none':
+                    continue
+                
+                # Create quality label
+                height = f.get('height')
+                if height:
+                    label = f'{height}p'
+                else:
+                    label = f.get('format_note')
+                    if not label:
+                        label = f.get('resolution')
+                    if not label:
+                        label = f'ID {f["format_id"]}'
+                
+                # Add filesize if available
+                filesize = f.get('filesize')
+                if not filesize:
+                    filesize = f.get('filesize_approx', 0)
+                
+                # Only add unique labels
+                if label not in seen:
+                    seen.add(label)
+                    formats.append({
+                        'quality': label,
+                        'format_id': f['format_id'],
+                        'ext': f['ext'],
+                        'filesize': filesize or 0
+                    })
+            
+            # If no formats found (especially for Instagram), try to extract from 'requested_formats' or 'url'
+            if not formats and info.get('url'):
+                # Direct video URL fallback
+                formats.append({
+                    'quality': 'Direct',
+                    'format_id': 'direct',
+                    'ext': 'mp4',
+                    'filesize': 0
+                })
+            
             # Sort by quality (highest first)
-            formats.sort(key=lambda x: int(x['quality'].replace('p', '') or 0), reverse=True)
-
+            def sort_key(x):
+                try:
+                    # Extract numeric part from quality string (e.g., "1080p" -> 1080)
+                    num = ''.join(filter(str.isdigit, x['quality']))
+                    return int(num) if num else 0
+                except:
+                    return 0
+            
+            formats.sort(key=sort_key, reverse=True)
+            
             # Audio-only formats
             audio_formats = []
             for f in info.get('formats', []):
                 if f.get('acodec') != 'none' and f.get('vcodec') == 'none':
+                    bitrate = f.get('abr')
+                    if bitrate:
+                        label = f'{bitrate} kbps'
+                    else:
+                        label = f.get('format_note') or 'MP3'
+                    
+                    filesize = f.get('filesize') or f.get('filesize_approx', 0)
+                    
                     audio_formats.append({
-                        'quality': f"{f.get('abr', 128)} kbps",
+                        'quality': label,
                         'format_id': f['format_id'],
-                        'ext': f['ext'],
-                        'filesize': f.get('filesize', 0)
+                        'ext': 'mp3',
+                        'filesize': filesize
                     })
+            
+            # If still no formats (e.g., Instagram embedded), add fallback
+            if not formats:
+                # For Instagram, we can use the direct video URL if available
+                if info.get('url'):
+                    formats.append({
+                        'quality': 'Source',
+                        'format_id': 'direct',
+                        'ext': 'mp4',
+                        'filesize': 0
+                    })
+                else:
+                    # Add standard YouTube-like fallback (won't work for Instagram but keeps UI)
+                    fallback_formats = [
+                        {'quality': '1080p', 'format_id': 'bestvideo[height<=1080]+bestaudio/best', 'ext': 'mp4', 'filesize': 0},
+                        {'quality': '720p', 'format_id': 'bestvideo[height<=720]+bestaudio/best', 'ext': 'mp4', 'filesize': 0},
+                        {'quality': '480p', 'format_id': 'bestvideo[height<=480]+bestaudio/best', 'ext': 'mp4', 'filesize': 0},
+                        {'quality': '360p', 'format_id': 'bestvideo[height<=360]+bestaudio/best', 'ext': 'mp4', 'filesize': 0},
+                    ]
+                    formats = fallback_formats
+            
+            if not audio_formats:
+                audio_formats.append({
+                    'quality': 'MP3 192kbps',
+                    'format_id': 'bestaudio/best',
+                    'ext': 'mp3',
+                    'filesize': 0
+                })
 
             return {
-                'title': info.get('title', 'Unknown'),
+                'title': info.get('title', 'Unknown Title'),
                 'thumbnail': info.get('thumbnail', ''),
                 'duration': info.get('duration', 0),
                 'uploader': info.get('uploader', 'Unknown'),
                 'views': info.get('view_count', 0),
-                'formats': formats[:10],
+                'formats': formats[:12],
                 'audio_formats': audio_formats[:5]
             }
     except Exception as e:
         print(f"Error fetching info: {e}")
+        # Return a basic structure with fallback formats for Instagram
+        if 'instagram.com' in url:
+            return {
+                'title': 'Instagram Video',
+                'thumbnail': 'https://via.placeholder.com/480x360?text=Instagram+Video',
+                'duration': 0,
+                'uploader': 'Instagram User',
+                'views': 0,
+                'formats': [
+                    {'quality': 'Best', 'format_id': 'bestvideo+bestaudio/best', 'ext': 'mp4', 'filesize': 0},
+                    {'quality': '720p', 'format_id': 'bestvideo[height<=720]+bestaudio/best', 'ext': 'mp4', 'filesize': 0},
+                ],
+                'audio_formats': [
+                    {'quality': 'MP3', 'format_id': 'bestaudio/best', 'ext': 'mp3', 'filesize': 0}
+                ]
+            }
         return None
 
 def progress_hook(d):
@@ -86,6 +198,13 @@ def progress_hook(d):
 
 def download_video(url, format_id, quality_type='video'):
     """Download video/audio with given format"""
+    # Headers for download
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+    }
+    
     ydl_opts = {
         'format': format_id,
         'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(title)s.%(ext)s'),
@@ -93,7 +212,14 @@ def download_video(url, format_id, quality_type='video'):
         'no_warnings': False,
         'ignoreerrors': True,
         'progress_hooks': [progress_hook],
+        'headers': headers,
     }
+    
+    # Instagram specific
+    if 'instagram.com' in url:
+        ydl_opts['format'] = format_id if format_id != 'direct' else 'bestvideo+bestaudio/best'
+        ydl_opts['headers']['Referer'] = 'https://www.instagram.com/'
+    
     if quality_type == 'audio':
         ydl_opts.update({
             'postprocessors': [{
@@ -103,6 +229,7 @@ def download_video(url, format_id, quality_type='video'):
             }],
             'format': 'bestaudio/best',
         })
+    
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
@@ -114,6 +241,10 @@ def download_video(url, format_id, quality_type='video'):
     except Exception as e:
         download_progress['status'] = 'error'
         download_progress['error'] = str(e)
+        # If direct format failed, try fallback
+        if 'instagram.com' in url and format_id == 'direct':
+            # Try downloading with best format
+            return download_video(url, 'bestvideo+bestaudio/best', quality_type)
         return None
 
 # ----- Routes -----
@@ -127,9 +258,11 @@ def get_info():
     url = request.json.get('url', '').strip()
     if not url:
         return jsonify({'error': 'No URL provided'}), 400
+    
     info = get_video_info(url)
     if not info:
-        return jsonify({'error': 'Could not fetch video info. Check URL.'}), 400
+        return jsonify({'error': 'Could not fetch video info. Make sure URL is correct and video is public.'}), 400
+    
     return jsonify(info)
 
 @app.route('/download', methods=['POST'])
@@ -137,11 +270,14 @@ def download():
     url = request.json.get('url', '').strip()
     format_id = request.json.get('format_id', 'best')
     quality_type = request.json.get('quality_type', 'video')
+    
     if not url:
-        return jsonify({'error': 'No URL'}), 400
+        return jsonify({'error': 'No URL provided'}), 400
+    
     filename = download_video(url, format_id, quality_type)
     if not filename:
-        return jsonify({'error': 'Download failed'}), 400
+        return jsonify({'error': 'Download failed. Please try again.'}), 400
+    
     return jsonify({'success': True, 'filename': os.path.basename(filename)})
 
 @app.route('/download_file/<filename>')

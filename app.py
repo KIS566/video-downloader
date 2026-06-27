@@ -19,7 +19,7 @@ if not os.path.exists(DOWNLOAD_FOLDER):
 download_progress = {'percent': 0, 'status': 'idle', 'speed': 'N/A', 'eta': 'N/A'}
 
 def get_video_info(url):
-    """Fetch video metadata without downloading"""
+    """Fetch video metadata without downloading - Updated to handle bot detection"""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -36,12 +36,24 @@ def get_video_info(url):
         'ignoreerrors': True,
         'extract_flat': False,
         'headers': headers,
-        'cookiefile': None,
+        'cookiefile': None,  # For cookies support if added
+        'geo_bypass': True,
+        'geo_bypass_country': 'US',
     }
     
+    # Instagram specific options
     if 'instagram.com' in url:
         ydl_opts['format'] = 'bestvideo+bestaudio/best'
         ydl_opts['headers']['Referer'] = 'https://www.instagram.com/'
+    
+    # YouTube specific options to avoid bot detection
+    if 'youtube.com' in url or 'youtu.be' in url:
+        ydl_opts['extractor_args'] = {
+            'youtube': {
+                'skip': ['hls', 'dash'],
+                'player_client': ['android', 'web'],
+            }
+        }
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -168,6 +180,7 @@ def get_video_info(url):
         return None
 
 def progress_hook(d):
+    """Progress hook for yt-dlp"""
     if d['status'] == 'downloading':
         download_progress['percent'] = d.get('_percent_str', '0%').replace('%', '').strip()
         download_progress['speed'] = d.get('_speed_str', 'N/A')
@@ -178,6 +191,7 @@ def progress_hook(d):
         download_progress['percent'] = '100'
 
 def download_video(url, format_id, quality_type='video'):
+    """Download video/audio with given format"""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -192,11 +206,22 @@ def download_video(url, format_id, quality_type='video'):
         'ignoreerrors': True,
         'progress_hooks': [progress_hook],
         'headers': headers,
+        'geo_bypass': True,
+        'geo_bypass_country': 'US',
     }
     
     if 'instagram.com' in url:
         ydl_opts['format'] = format_id if format_id != 'direct' else 'bestvideo+bestaudio/best'
         ydl_opts['headers']['Referer'] = 'https://www.instagram.com/'
+    
+    # YouTube specific download options
+    if 'youtube.com' in url or 'youtu.be' in url:
+        ydl_opts['extractor_args'] = {
+            'youtube': {
+                'skip': ['hls', 'dash'],
+                'player_client': ['android', 'web'],
+            }
+        }
     
     if quality_type == 'audio':
         ydl_opts.update({
@@ -235,6 +260,11 @@ def get_info():
     if not url:
         return jsonify({'error': 'No URL provided'}), 400
     
+    # If it's a YouTube short URL, convert to full URL
+    if 'youtu.be' in url:
+        video_id = url.split('/')[-1].split('?')[0]
+        url = f'https://www.youtube.com/watch?v={video_id}'
+    
     info = get_video_info(url)
     if not info:
         return jsonify({'error': 'Could not fetch video info. Make sure URL is correct and video is public.'}), 400
@@ -269,6 +299,5 @@ def progress():
 
 # ----- Run (Production Ready) -----
 if __name__ == '__main__':
-    # Render will provide PORT environment variable
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎬 Video Downloader Pro - Free</title>
+    <title>Video Downloader Pro</title>
     <style>
         * {
             margin: 0;
@@ -20,7 +20,7 @@
         }
 
         .container {
-            max-width: 1000px;
+            max-width: 900px;
             margin: 0 auto;
         }
 
@@ -34,12 +34,6 @@
             background: linear-gradient(135deg, #f093fb, #f5576c, #4facfe);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            animation: glow 2s ease-in-out infinite alternate;
-        }
-
-        @keyframes glow {
-            0% { text-shadow: 0 0 20px rgba(245,87,108,0.2); }
-            100% { text-shadow: 0 0 40px rgba(79,172,254,0.4); }
         }
 
         .header p {
@@ -55,11 +49,6 @@
             padding: 30px;
             margin-bottom: 20px;
             border: 1px solid rgba(255,255,255,0.08);
-            transition: transform 0.3s;
-        }
-
-        .card:hover {
-            transform: translateY(-2px);
         }
 
         .input-group {
@@ -77,13 +66,11 @@
             color: white;
             font-size: 16px;
             min-width: 200px;
-            transition: all 0.3s;
         }
 
         .input-group input:focus {
             outline: none;
             border-color: #4facfe;
-            box-shadow: 0 0 20px rgba(79,172,254,0.1);
         }
 
         .input-group input::placeholder {
@@ -98,7 +85,6 @@
             font-weight: 700;
             cursor: pointer;
             transition: all 0.3s;
-            white-space: nowrap;
         }
 
         .btn-primary {
@@ -118,7 +104,7 @@
 
         .sites {
             display: flex;
-            gap: 12px;
+            gap: 10px;
             flex-wrap: wrap;
             justify-content: center;
             margin-top: 15px;
@@ -133,7 +119,7 @@
             border: 1px solid rgba(255,255,255,0.05);
         }
 
-        #videoInfo {
+        .video-info {
             display: none;
             animation: fadeIn 0.5s ease;
         }
@@ -185,7 +171,7 @@
 
         .format-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 12px;
             margin-top: 15px;
         }
@@ -304,7 +290,6 @@
         }
         @media (max-width: 480px) {
             .format-grid { grid-template-columns: 1fr; }
-            .btn { width: 100%; }
         }
     </style>
 </head>
@@ -312,7 +297,7 @@
     <div class="container">
         <div class="header">
             <h1>⬇️ Video Downloader Pro</h1>
-            <p>YouTube • Instagram • Facebook • TikTok • Vimeo • More</p>
+            <p>YouTube • Instagram • Facebook • TikTok</p>
         </div>
 
         <div class="card">
@@ -326,14 +311,12 @@
                 <span class="site-badge">👍 Facebook</span>
                 <span class="site-badge">🐦 Twitter</span>
                 <span class="site-badge">🎵 TikTok</span>
-                <span class="site-badge">🎬 Vimeo</span>
-                <span class="site-badge">📹 Dailymotion</span>
             </div>
         </div>
 
         <div class="alert" id="alert"></div>
 
-        <div class="card" id="videoInfo">
+        <div class="card video-info" id="videoInfo">
             <div class="video-preview">
                 <div class="thumbnail-container">
                     <img id="thumbnail" src="" alt="Thumbnail">
@@ -368,7 +351,8 @@
         </div>
 
         <div class="footer">
-            <p>🔒 100% Free • No Registration • Powered by yt-dlp</p>
+            <p>🔒 100% Free • No Registration • Works on PC & Mobile</p>
+            <p style="font-size:12px; margin-top:5px;">⚡ Powered by yt-dlp</p>
         </div>
     </div>
 
